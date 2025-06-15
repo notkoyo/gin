@@ -81,130 +81,133 @@ func main() {
 	r.Use(sloggin.New(logger))
 	r.Use(gin.Recovery())
 
-	r.GET("/rest/v1/rank/:region/:name/:tag", func(c *gin.Context) {
-		start := time.Now()
-
-		format := c.Query("format")
-
-		region := c.Param("region")
-		name := c.Param("name")
-		tag := c.Param("tag")
-
-		if !isValidRegion(region) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Invalid Region: " + region,
-			})
-			return
-		}
-
-		cacheKey := fmt.Sprintf("%s:%s:%s", region, name, tag)
-
-		if cachedData, found := getFromCache(cacheKey); found {
-			if currentData, ok := cachedData["current_data"].(map[string]interface{}); ok {
-				rank, ok := currentData["currenttierpatched"].(string)
-				if !ok {
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"error": "Invalid rank data type",
-					})
-					return
-				}
-				rr, ok := currentData["ranking_in_tier"].(float64)
-				if !ok {
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"error": "Invalid RR data type",
-					})
-					return
-				}
-				
-				var highestRank string
-				if highestRankObj, ok := cachedData["highest_rank"].(map[string]interface{}); ok {
-					if patchedTier, ok := highestRankObj["patched_tier"].(string); ok {
-						highestRank = patchedTier
-					}
-				}
-
-				latency := time.Since(start)
-
-				if format == "text" {
-					c.String(http.StatusOK, fmt.Sprintf("%s [%dRR] | Peak: %s)", rank, int(rr), highestRank))
-					return
-				}
-
-				c.JSON(http.StatusOK, gin.H{
-					"message": fmt.Sprintf("%s [%dRR] | Peak: %s", rank, int(rr), highestRank),
-					"latency:ms": latency.Milliseconds(),
-					"cached": true,
+	{
+		v1 := r.Group("/rest/v1")
+		v1.GET("/rank/:region/:name/:tag", func(c *gin.Context) {
+			start := time.Now()
+	
+			format := c.Query("format")
+	
+			region := c.Param("region")
+			name := c.Param("name")
+			tag := c.Param("tag")
+	
+			if !isValidRegion(region) {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": "Invalid Region: " + region,
 				})
 				return
 			}
-		}
-
-		res, err := httpClient.Get(fmt.Sprintf("https://api.henrikdev.xyz/valorant/v2/mmr/%s/%s/%s?api_key=%s", region, name, tag, apiKey))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Issue connecting to external API",
-			})
-			return
-		}
-		defer res.Body.Close()
-
-		if res.StatusCode != http.StatusOK {
-			c.JSON(res.StatusCode, gin.H{
-				"error": fmt.Sprintf("API returned status code: %d", res.StatusCode),
-			})
-			return
-		}
-
-		var result map[string]interface{}
-		if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to parse API response",
-			})
-			return
-		}
-
-		if data, ok := result["data"].(map[string]interface{}); ok {
-			setCache(cacheKey, data)
-
-			if currentData, ok := data["current_data"].(map[string]interface{}); ok {
-				rank, ok := currentData["currenttierpatched"].(string)
-				if !ok {
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"error": "Invalid rank data type",
-					})
-					return
-				}
-				rr, ok := currentData["ranking_in_tier"].(float64)
-				if !ok {
-					c.JSON(http.StatusInternalServerError, gin.H{
-						"error": "Invalid RR data type",
-					})
-					return
-				}
-				
-				var highestRank string
-				if highestRankObj, ok := data["highest_rank"].(map[string]interface{}); ok {
-					if patchedTier, ok := highestRankObj["patched_tier"].(string); ok {
-						highestRank = patchedTier
+	
+			cacheKey := fmt.Sprintf("%s:%s:%s", region, name, tag)
+	
+			if cachedData, found := getFromCache(cacheKey); found {
+				if currentData, ok := cachedData["current_data"].(map[string]interface{}); ok {
+					rank, ok := currentData["currenttierpatched"].(string)
+					if !ok {
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"error": "Invalid rank data type",
+						})
+						return
 					}
-				}
-
-				latency := time.Since(start)
-
-				if format == "text" {
-					c.String(http.StatusOK, fmt.Sprintf("%s [%dRR] | Peak: %s", rank, int(rr), highestRank))
+					rr, ok := currentData["ranking_in_tier"].(float64)
+					if !ok {
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"error": "Invalid RR data type",
+						})
+						return
+					}
+					
+					var highestRank string
+					if highestRankObj, ok := cachedData["highest_rank"].(map[string]interface{}); ok {
+						if patchedTier, ok := highestRankObj["patched_tier"].(string); ok {
+							highestRank = patchedTier
+						}
+					}
+	
+					latency := time.Since(start)
+	
+					if format == "text" {
+						c.String(http.StatusOK, fmt.Sprintf("%s [%dRR] | Peak: %s)", rank, int(rr), highestRank))
+						return
+					}
+	
+					c.JSON(http.StatusOK, gin.H{
+						"message": fmt.Sprintf("%s [%dRR] | Peak: %s", rank, int(rr), highestRank),
+						"latency:ms": latency.Milliseconds(),
+						"cached": true,
+					})
 					return
 				}
-
-				c.JSON(http.StatusOK, gin.H{
-					"message": fmt.Sprintf("%s [%dRR] | Peak: %s", rank, int(rr), highestRank),
-					"latency:ms": latency.Milliseconds(),
-					"cached": false,
+			}
+	
+			res, err := httpClient.Get(fmt.Sprintf("https://api.henrikdev.xyz/valorant/v2/mmr/%s/%s/%s?api_key=%s", region, name, tag, apiKey))
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "Issue connecting to external API",
 				})
 				return
 			}
-		}
-	})
+			defer res.Body.Close()
+	
+			if res.StatusCode != http.StatusOK {
+				c.JSON(res.StatusCode, gin.H{
+					"error": fmt.Sprintf("API returned status code: %d", res.StatusCode),
+				})
+				return
+			}
+	
+			var result map[string]interface{}
+			if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "Failed to parse API response",
+				})
+				return
+			}
+	
+			if data, ok := result["data"].(map[string]interface{}); ok {
+				setCache(cacheKey, data)
+	
+				if currentData, ok := data["current_data"].(map[string]interface{}); ok {
+					rank, ok := currentData["currenttierpatched"].(string)
+					if !ok {
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"error": "Invalid rank data type",
+						})
+						return
+					}
+					rr, ok := currentData["ranking_in_tier"].(float64)
+					if !ok {
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"error": "Invalid RR data type",
+						})
+						return
+					}
+					
+					var highestRank string
+					if highestRankObj, ok := data["highest_rank"].(map[string]interface{}); ok {
+						if patchedTier, ok := highestRankObj["patched_tier"].(string); ok {
+							highestRank = patchedTier
+						}
+					}
+	
+					latency := time.Since(start)
+	
+					if format == "text" {
+						c.String(http.StatusOK, fmt.Sprintf("%s [%dRR] | Peak: %s", rank, int(rr), highestRank))
+						return
+					}
+	
+					c.JSON(http.StatusOK, gin.H{
+						"message": fmt.Sprintf("%s [%dRR] | Peak: %s", rank, int(rr), highestRank),
+						"latency:ms": latency.Milliseconds(),
+						"cached": false,
+					})
+					return
+				}
+			}
+		})
+	}
 
 	port := cmp.Or(os.Getenv("PORT"), "8080")
 
