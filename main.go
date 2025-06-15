@@ -3,15 +3,13 @@ package main
 import (
 	"cmp"
 	"log/slog"
-	"log"
 	"os"
 	"fmt"
 	"net/http"
 	"encoding/json"
+	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/joho/godotenv"
 
 	sloggin "github.com/samber/slog-gin"
 )
@@ -31,27 +29,17 @@ func isValidRegion(region string) bool {
 }
 
 func main() {
-	env := os.Getenv("ENVIRONMENT")
-
-	if env == "development" {
-		err := godotenv.Load()
-		
-		if err != nil {
-			log.Println("Warning: .env file not found")
-			return
-		}
-	}
-
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	gin.SetMode(gin.ReleaseMode)
-
 	r := gin.New()
 
 	r.Use(sloggin.New(logger))
 	r.Use(gin.Recovery())
 
 	r.GET("/rest/v1/rank/:region/:name/:tag", func(c *gin.Context) {
+		start := time.Now()
+
 		region := c.Param("region")
 		name := c.Param("name")
 		tag := c.Param("tag")
@@ -64,8 +52,7 @@ func main() {
 		}
 
 		apiKey := os.Getenv("VALORANT_API_KEY")
-		url := fmt.Sprintf("https://api.henrikdev.xyz/valorant/v2/mmr/%s/%s/%s?api_key=%s", region, name, tag, apiKey)
-		res, err := http.Get(url)
+		res, err := http.Get(fmt.Sprintf("https://api.henrikdev.xyz/valorant/v2/mmr/%s/%s/%s?api_key=%s", region, name, tag, apiKey))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Issue connecting to external API",
@@ -77,7 +64,6 @@ func main() {
 		if res.StatusCode != http.StatusOK {
 			c.JSON(res.StatusCode, gin.H{
 				"error": fmt.Sprintf("API returned status code: %d", res.StatusCode),
-				"url": url,
 			})
 			return
 		}
@@ -90,7 +76,6 @@ func main() {
 			return
 		}
 
-		// Access current_data from the response
 		if data, ok := result["data"].(map[string]interface{}); ok {
 			if currentData, ok := data["current_data"].(map[string]interface{}); ok {
 				rank, ok := currentData["currenttierpatched"].(string)
@@ -108,8 +93,11 @@ func main() {
 					return
 				}
 
+				latency := time.Since(start)
+
 				c.JSON(http.StatusOK, gin.H{
 					"message": fmt.Sprintf("%s [%dRR]", rank, int(rr)),
+					"latency:ms": latency.Milliseconds(),
 				})
 				return
 			}
