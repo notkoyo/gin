@@ -115,16 +115,23 @@ func main() {
 					})
 					return
 				}
+				
+				var highestRank string
+				if highestRankObj, ok := cachedData["highest_rank"].(map[string]interface{}); ok {
+					if patchedTier, ok := highestRankObj["patched_tier"].(string); ok {
+						highestRank = patchedTier
+					}
+				}
 
 				latency := time.Since(start)
 
 				if format == "text" {
-					c.String(http.StatusOK, fmt.Sprintf("%s [%dRR]", rank, int(rr)))
+					c.String(http.StatusOK, fmt.Sprintf("%s [%dRR] | Peak: %s)", rank, int(rr), highestRank))
 					return
 				}
 
 				c.JSON(http.StatusOK, gin.H{
-					"message": fmt.Sprintf("%s [%dRR]", rank, int(rr)),
+					"message": fmt.Sprintf("%s [%dRR] | Peak: %s", rank, int(rr), highestRank),
 					"latency:ms": latency.Milliseconds(),
 					"cached": true,
 				})
@@ -174,16 +181,23 @@ func main() {
 					})
 					return
 				}
+				
+				var highestRank string
+				if highestRankObj, ok := data["highest_rank"].(map[string]interface{}); ok {
+					if patchedTier, ok := highestRankObj["patched_tier"].(string); ok {
+						highestRank = patchedTier
+					}
+				}
 
 				latency := time.Since(start)
 
 				if format == "text" {
-					c.String(http.StatusOK, fmt.Sprintf("%s [%dRR]", rank, int(rr)))
+					c.String(http.StatusOK, fmt.Sprintf("%s [%dRR] | Peak: %s", rank, int(rr), highestRank))
 					return
 				}
 
 				c.JSON(http.StatusOK, gin.H{
-					"message": fmt.Sprintf("%s [%dRR]", rank, int(rr)),
+					"message": fmt.Sprintf("%s [%dRR] | Peak: %s", rank, int(rr), highestRank),
 					"latency:ms": latency.Milliseconds(),
 					"cached": false,
 				})
