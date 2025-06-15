@@ -84,6 +84,8 @@ func main() {
 	r.GET("/rest/v1/rank/:region/:name/:tag", func(c *gin.Context) {
 		start := time.Now()
 
+		format := c.Query("format")
+
 		region := c.Param("region")
 		name := c.Param("name")
 		tag := c.Param("tag")
@@ -115,6 +117,11 @@ func main() {
 				}
 
 				latency := time.Since(start)
+
+				if format == "text" {
+					c.String(http.StatusOK, fmt.Sprintf("%s [%dRR]", rank, int(rr)))
+					return
+				}
 
 				c.JSON(http.StatusOK, gin.H{
 					"message": fmt.Sprintf("%s [%dRR]", rank, int(rr)),
@@ -169,6 +176,11 @@ func main() {
 				}
 
 				latency := time.Since(start)
+
+				if format == "text" {
+					c.String(http.StatusOK, fmt.Sprintf("%s [%dRR]", rank, int(rr)))
+					return
+				}
 
 				c.JSON(http.StatusOK, gin.H{
 					"message": fmt.Sprintf("%s [%dRR]", rank, int(rr)),
